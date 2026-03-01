@@ -589,7 +589,6 @@ const DEFAULT_PLAN = {
   oneRMs: {
     'Squat Clean': 115,
     'Front Squat': 100,
-    'Back Squat': 130,
     'Bench Press': 80,
     'Deadlift': 160,
     'Overhead Press': 55
@@ -611,10 +610,6 @@ const DEFAULT_PLAN = {
           name: 'Clean Pulls', sets: 4, reps: 4, targetRIR: 2, tempo: '2-1-X-0', isOlympic: false,
           refExercise: 'Squat Clean', refMultiplier: 1.125
         },
-        {
-          name: 'Clean Deadlift', sets: 4, reps: 4, targetRIR: 2, tempo: '3-1-X-0', isOlympic: false,
-          refExercise: 'Squat Clean', refMultiplier: 1.025
-        }
       ],
       accessories: [
         { pattern: 'Overhead Press variation', sets: 3, repsRange: '8-12', targetRIR: 2 },
@@ -625,14 +620,12 @@ const DEFAULT_PLAN = {
     {
       name: 'Day 2 — Full Body A',
       prescribed: [
-        { name: 'Back Squat', sets: 4, reps: 6, targetRIR: 2, tempo: '3-1-1-0', isOlympic: false },
         { name: 'Front Squat', sets: 4, reps: 5, targetRIR: 2, tempo: '3-1-1-0', isOlympic: false },
         { name: 'Bench Press', sets: 4, reps: 6, targetRIR: 2, tempo: '2-1-1-0', isOlympic: false }
       ],
       accessories: [
         { pattern: 'Horizontal Pull (Row variation)', sets: 3, repsRange: '8-12', targetRIR: 2 },
         { pattern: 'Unilateral Leg (Lunge/Split Squat)', sets: 3, repsRange: '8-12', targetRIR: 2 },
-        { pattern: 'Hip Hinge (RDL/Good Morning)', sets: 3, repsRange: '8-12', targetRIR: 2 },
         { pattern: 'Biceps / Arm', sets: 3, repsRange: '10-15', targetRIR: 2 }
       ]
     },
