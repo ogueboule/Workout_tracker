@@ -588,7 +588,6 @@ const STORAGE_KEY = 'strength_tracker_v1';
 const DEFAULT_PLAN = {
   oneRMs: {
     'Squat Clean': 115,
-    'Clean Pulls': 130,
     'Front Squat': 100,
     'Back Squat': 130,
     'Bench Press': 80,
@@ -600,9 +599,22 @@ const DEFAULT_PLAN = {
     {
       name: 'Day 1 — Weightlifting',
       prescribed: [
-        { name: 'Squat Clean', sets: 5, reps: 3, intensityPct: null, targetRIR: 2, tempo: '', isOlympic: true },
-        { name: 'Clean Pulls', sets: 4, reps: 4, intensityPct: null, targetRIR: 2, tempo: '2-1-X-0', isOlympic: false },
-        { name: 'Front Squat', sets: 4, reps: 5, intensityPct: null, targetRIR: 2, tempo: '3-1-1-0', isOlympic: false }
+        {
+          name: 'Cluster Complex',
+          clusterDesc: 'Squat Clean + Hang Power Clean + Hang Squat Clean',
+          isCluster: true,
+          sets: 5, reps: 1, targetRIR: 2, tempo: '', isOlympic: true,
+          refExercise: 'Squat Clean', refMultiplier: 1.0,
+          intensityOverride: { 0: [0.70, 0.75], 1: [0.77, 0.82], 2: [0.85, 0.90] }
+        },
+        {
+          name: 'Clean Pulls', sets: 4, reps: 4, targetRIR: 2, tempo: '2-1-X-0', isOlympic: false,
+          refExercise: 'Squat Clean', refMultiplier: 1.125
+        },
+        {
+          name: 'Clean Deadlift', sets: 4, reps: 4, targetRIR: 2, tempo: '3-1-X-0', isOlympic: false,
+          refExercise: 'Squat Clean', refMultiplier: 1.025
+        }
       ],
       accessories: [
         { pattern: 'Overhead Press variation', sets: 3, repsRange: '8-12', targetRIR: 2 },
@@ -613,24 +625,26 @@ const DEFAULT_PLAN = {
     {
       name: 'Day 2 — Full Body A',
       prescribed: [
-        { name: 'Back Squat', sets: 4, reps: 6, intensityPct: null, targetRIR: 2, tempo: '3-1-1-0', isOlympic: false },
-        { name: 'Bench Press', sets: 4, reps: 6, intensityPct: null, targetRIR: 2, tempo: '2-1-1-0', isOlympic: false }
+        { name: 'Back Squat', sets: 4, reps: 6, targetRIR: 2, tempo: '3-1-1-0', isOlympic: false },
+        { name: 'Front Squat', sets: 4, reps: 5, targetRIR: 2, tempo: '3-1-1-0', isOlympic: false },
+        { name: 'Bench Press', sets: 4, reps: 6, targetRIR: 2, tempo: '2-1-1-0', isOlympic: false }
       ],
       accessories: [
         { pattern: 'Horizontal Pull (Row variation)', sets: 3, repsRange: '8-12', targetRIR: 2 },
         { pattern: 'Unilateral Leg (Lunge/Split Squat)', sets: 3, repsRange: '8-12', targetRIR: 2 },
+        { pattern: 'Hip Hinge (RDL/Good Morning)', sets: 3, repsRange: '8-12', targetRIR: 2 },
         { pattern: 'Biceps / Arm', sets: 3, repsRange: '10-15', targetRIR: 2 }
       ]
     },
     {
       name: 'Day 3 — Full Body B',
       prescribed: [
-        { name: 'Deadlift', sets: 4, reps: 5, intensityPct: null, targetRIR: 2, tempo: '2-1-1-0', isOlympic: false },
-        { name: 'Overhead Press', sets: 4, reps: 6, intensityPct: null, targetRIR: 2, tempo: '2-1-1-0', isOlympic: false }
+        { name: 'Deadlift', sets: 4, reps: 5, targetRIR: 2, tempo: '2-1-1-0', isOlympic: false },
+        { name: 'Overhead Press', sets: 4, reps: 6, targetRIR: 2, tempo: '2-1-1-0', isOlympic: false }
       ],
       accessories: [
         { pattern: 'Vertical Pull (Pullup/Lat Pulldown)', sets: 3, repsRange: '8-12', targetRIR: 2 },
-        { pattern: 'Hip Hinge (RDL/Good Morning)', sets: 3, repsRange: '8-12', targetRIR: 2 },
+        { pattern: 'Posterior Chain (Nordic Curls/Back Extensions)', sets: 3, repsRange: '8-12', targetRIR: 2 },
         { pattern: 'Triceps / Arm', sets: 3, repsRange: '10-15', targetRIR: 2 }
       ]
     }
@@ -817,28 +831,49 @@ function getWorkoutParams(exercise, week) {
   // Progressive overload within phase
   const weekProgression = phaseWeek * 0.03; // +3% per week within phase
 
-  let sets = Math.round(exercise.sets * phase.setsMultiplier);
-  let reps = Math.max(1, Math.round(exercise.reps * phase.repsMultiplier));
+  // Cluster complexes keep fixed sets, no volume scaling
+  let sets = exercise.isCluster ? exercise.sets : Math.round(exercise.sets * phase.setsMultiplier);
+  let reps = exercise.isCluster ? exercise.reps : Math.max(1, Math.round(exercise.reps * phase.repsMultiplier));
   let targetRIR = Math.max(0, phase.rirBase - phaseWeek); // decrease RIR each week
 
   // For Olympic lifts, keep reps low
-  if (exercise.isOlympic) {
+  if (exercise.isOlympic && !exercise.isCluster) {
     reps = Math.min(reps, exercise.reps);
     if (phaseIdx === 2) reps = Math.min(reps, 2); // singles/doubles for peaking
   }
 
-  // Calculate suggested weight based on per-exercise 1RM
-  let suggestedWeight = null;
-  const intensity = phase.intensityRange[0] +
-    (phase.intensityRange[1] - phase.intensityRange[0]) * (phaseWeek / 2) +
+  // Use custom intensity range if provided, otherwise phase default
+  const intensityRange = (exercise.intensityOverride && exercise.intensityOverride[phaseIdx])
+    ? exercise.intensityOverride[phaseIdx]
+    : phase.intensityRange;
+
+  const intensity = intensityRange[0] +
+    (intensityRange[1] - intensityRange[0]) * (phaseWeek / 2) +
     weekProgression;
 
-  const exerciseRM = state.plan.oneRMs[exercise.name];
+  // Resolve 1RM: refExercise with multiplier, or direct lookup
+  let suggestedWeight = null;
+  let exerciseRM;
+  if (exercise.refExercise) {
+    exerciseRM = (state.plan.oneRMs[exercise.refExercise] || 0) * (exercise.refMultiplier || 1);
+  } else {
+    exerciseRM = state.plan.oneRMs[exercise.name];
+  }
   if (exerciseRM) {
     suggestedWeight = Math.round(exerciseRM * intensity / 2.5) * 2.5;
   }
 
-  return { sets, reps, targetRIR, suggestedWeight, phaseName: phase.name, intensity };
+  // Cluster description for peaking
+  let clusterNote = '';
+  if (exercise.isCluster) {
+    if (phaseIdx === 2 && phaseWeek === 2) {
+      clusterNote = 'Heavy singles from floor';
+    } else if (phaseIdx === 2) {
+      clusterNote = 'Hang movements compress to singles';
+    }
+  }
+
+  return { sets, reps, targetRIR, suggestedWeight, phaseName: phase.name, intensity, clusterNote };
 }
 
 function getAccessoryParams(accessory, week) {
@@ -981,17 +1016,21 @@ function renderPlan() {
   day.prescribed.forEach(ex => {
     const params = getWorkoutParams(ex, viewWeek);
     const rec = getRecommendedWeight(ex.name);
+    const repLabel = ex.isCluster ? `${params.sets} sets × 1 cluster` : `${params.sets}×${params.reps} @ ${params.targetRIR} RIR`;
+    const refNote = ex.refExercise ? `(${Math.round(ex.refMultiplier*100)}% of ${ex.refExercise} 1RM)` : '';
     html += `<div class="plan-exercise">
       <div class="flex-between">
         <div>
           <span style="font-weight:600;font-size:14px;">${ex.name}</span>
           ${ex.isOlympic ? '<span class="badge badge-peak" style="margin-left:6px;font-size:9px;">OLY</span>' : ''}
         </div>
-        <span class="text-xs text-muted">${params.sets}×${params.reps} @ ${params.targetRIR} RIR</span>
+        <span class="text-xs text-muted">${repLabel}</span>
       </div>
+      ${ex.clusterDesc ? `<div class="text-xs" style="color:var(--accent);margin-top:2px;">${ex.clusterDesc}</div>` : ''}
+      ${params.clusterNote ? `<div class="text-xs" style="color:var(--yellow);margin-top:2px;">${params.clusterNote}</div>` : ''}
       ${ex.tempo ? `<div class="text-xs text-muted">Tempo: ${ex.tempo}</div>` : ''}
-      <div class="rest-info">Rest: ${formatSeconds(viewPhase.restPrescribed)}</div>
-      ${params.suggestedWeight ? `<div class="weight-suggestion">Target: <strong>${params.suggestedWeight}kg</strong> (${Math.round(params.intensity*100)}% 1RM)</div>` : ''}
+      <div class="rest-info">Rest: ${formatSeconds(viewPhase.restPrescribed)}${ex.isCluster ? ' (between sets, not within cluster)' : ''}</div>
+      ${params.suggestedWeight ? `<div class="weight-suggestion">Target: <strong>${params.suggestedWeight}kg</strong> (${Math.round(params.intensity*100)}% ${refNote || '1RM'})</div>` : ''}
       ${rec ? `<div class="weight-suggestion">Auto-reg suggestion: <strong>${rec}kg</strong></div>` : ''}
     </div>`;
   });
@@ -1051,6 +1090,8 @@ function startWorkout(week, day) {
       name: ex.name,
       isPrescribed: true,
       isOlympic: ex.isOlympic || false,
+      isCluster: ex.isCluster || false,
+      clusterDesc: ex.clusterDesc || '',
       sets,
       collapsed: false
     });
@@ -1321,6 +1362,7 @@ function renderWorkout() {
       <div class="exercise-header" onclick="toggleExercise(${exIdx})">
         <div>
           <div class="exercise-name">${exDone ? '✓ ' : ''}${exName}</div>
+          ${ex.isCluster && ex.clusterDesc ? `<div class="accessory-label" style="color:var(--accent);font-style:italic">${ex.clusterDesc}</div>` : ''}
           ${!ex.isPrescribed ? `<div class="accessory-label">${ex.pattern}</div>` : ''}
           <div class="exercise-meta">${ex.sets.filter(s=>s.completed).length}/${ex.sets.length} sets</div>
         </div>
@@ -1620,14 +1662,16 @@ function renderSettings() {
   document.getElementById('toggleChime').checked = state.settings.chimeEnabled;
   document.getElementById('toggleWakeLock').checked = state.settings.wakeLockEnabled;
 
-  // Build 1RM inputs for all prescribed exercises
+  // Build 1RM inputs for prescribed exercises that have their own 1RM (not refExercise)
   const allPrescribed = [];
   const seen = new Set();
   state.plan.days.forEach(day => {
     day.prescribed.forEach(ex => {
-      if (!seen.has(ex.name)) {
-        seen.add(ex.name);
-        allPrescribed.push(ex.name);
+      if (ex.refExercise) return; // derives from another exercise, no own 1RM
+      const name = ex.name;
+      if (!seen.has(name)) {
+        seen.add(name);
+        allPrescribed.push(name);
       }
     });
   });
